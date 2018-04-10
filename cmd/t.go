@@ -6,14 +6,18 @@
 package main
 
 import (
-	"net/rpc"
 	"fmt"
+	"net/rpc"
 )
 
 func main() {
+	//a := []byte{1,2}
+	str := string(123)
+	fmt.Println(str)
+
 
 	cli, err := rpc.DialHTTP("tcp", "192.168.1.4:1235")
-	if  err != nil{
+	if err != nil {
 		panic(err)
 	}
 	defer cli.Close()
@@ -33,11 +37,12 @@ func main() {
 	}
 	fmt.Println(re)
 
-	var rel bool
-	err = cli.Call("VSeq.Release", reply, &rel)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(rel)
-
+	/*
+		var rel bool
+		err = cli.Call("VSeq.Release", reply, &rel)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(rel)
+	*/
 }
