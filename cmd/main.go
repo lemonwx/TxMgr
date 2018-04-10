@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"sync/atomic"
 	"sync"
+	"encoding/binary"
 
 	"github.com/lemonwx/log"
 )
@@ -53,21 +54,24 @@ func main() {
 }
 
 
-func (v *VSeq) NextV(args uint8, reply *uint64) error {
+func (v *VSeq) NextV(args uint8, reply *[]byte) error {
 	tmp := atomic.AddUint64(&baseVersion, 1)
-	*reply = tmp
+	*reply = make([]byte, 8)
+	binary.BigEndian.PutUint64(*reply, tmp)
 	lock.Lock()
 	vInuse[tmp] = "test"
 	lock.Unlock()
 	return nil
 }
 
-func (v *VSeq) VInUser(args uint8, reply *[]uint64) error {
+func (v *VSeq) VInUser(args uint8, reply *[][]byte) error {
 	lock.Lock()
-	ret := make([]uint64, len(vInuse))
+	ret := make([][]byte, len(vInuse))
 	idx := 0
 	for k, _ := range vInuse {
-		ret[idx] = k
+		buf := make([]byte, 8)
+		binary.BigEndian.PutUint64(buf, k)
+		ret[idx] = buf
 		idx += 1
 	}
 	lock.Unlock()
@@ -75,9 +79,12 @@ func (v *VSeq) VInUser(args uint8, reply *[]uint64) error {
 	return nil
 }
 
-func (v *VSeq) Release(args uint64, reply *bool) error {
+func (v *VSeq) Release(args []byte, reply *bool) error {
+
+
+	version := binary.BigEndian.Uint64(args)
 	lock.Lock()
-	delete(vInuse, uint64(args))
+	delete(vInuse, version)
 	*reply = true
 	lock.Unlock()
 	return nil

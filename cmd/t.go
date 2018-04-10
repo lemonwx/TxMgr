@@ -11,21 +11,22 @@ import (
 )
 
 func main() {
+
 	cli, err := rpc.DialHTTP("tcp", "192.168.1.4:1235")
 	if  err != nil{
 		panic(err)
 	}
 	defer cli.Close()
 
-	var reply uint64
+	var reply []byte
 	err = cli.Call("VSeq.NextV", uint8(0), &reply)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(reply)
+	fmt.Println(27, reply)
 
-	var re []uint64
+	var re [][]byte
 	err = cli.Call("VSeq.VInUser", uint8(0), &re)
 	if err != nil {
 		panic(err)
