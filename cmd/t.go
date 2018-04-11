@@ -15,7 +15,6 @@ func main() {
 	str := string(123)
 	fmt.Println(str)
 
-
 	cli, err := rpc.DialHTTP("tcp", "192.168.1.4:1235")
 	if err != nil {
 		panic(err)
@@ -37,12 +36,10 @@ func main() {
 	}
 	fmt.Println(re)
 
-	/*
-		var rel bool
-		err = cli.Call("VSeq.Release", reply, &rel)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(rel)
-	*/
+	var rel bool
+	err = cli.Call("VSeq.Release", reply, &rel)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(rel)
 }

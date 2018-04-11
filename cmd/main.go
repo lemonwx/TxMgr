@@ -6,14 +6,14 @@
 package main
 
 import (
+	"fmt"
 	"net"
+	"net/http"
 	"net/rpc"
 	"os"
-	"fmt"
-	"net/http"
-	"sync/atomic"
-	"sync"
 	"strconv"
+	"sync"
+	"sync/atomic"
 
 	"github.com/lemonwx/log"
 )
@@ -23,7 +23,6 @@ var NextV uint64
 var vInuse map[uint64]string
 var baseVersion uint64 = 1
 var lock sync.RWMutex
-
 
 type VSeq struct {
 }
@@ -53,7 +52,6 @@ func main() {
 	http.Serve(l, nil)
 }
 
-
 func (v *VSeq) NextV(args uint8, reply *[]byte) error {
 	tmp := atomic.AddUint64(&baseVersion, 1)
 	//*reply = make([]byte, 8)
@@ -80,10 +78,7 @@ func (v *VSeq) VInUser(args uint8, reply *[][]byte) error {
 
 func (v *VSeq) Release(args []byte, reply *bool) error {
 
-	tmp := ""
-	for _, arg := range args {
-		tmp += string(arg)
-	}
+	tmp := string(args)
 	fmt.Println(tmp)
 	version, err := strconv.ParseUint(tmp, 10, 64)
 	if err != nil {
