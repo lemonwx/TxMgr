@@ -6,31 +6,27 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"net/rpc"
 	"os"
-	"strconv"
 	"sync"
-	"sync/atomic"
 
 	"github.com/lemonwx/log"
 )
 
-var addr string = "192.168.1.4:1235"
+var addr string = "192.168.1.2:1235"
 var NextV uint64
-var vInuse map[uint64]string
-var baseVersion uint64 = 1
+var vInuse map[uint64]uint8
+var baseVersion uint64 = 1000
 var lock sync.RWMutex
 
 type VSeq struct {
 }
 
 func setupLogger() {
-	f, err := os.Create("xsql.log")
+	f, err := os.Create("v.log")
 	if err != nil {
-		fmt.Println("touch log file xsql.log failed: %v", err)
 	}
 	log.NewDefaultLogger(f)
 	log.SetLevel(log.DEBUG)
@@ -38,7 +34,7 @@ func setupLogger() {
 }
 
 func main() {
-	vInuse = make(map[uint64]string, 1024)
+	vInuse = make(map[uint64]uint8, 1024)
 
 	vSeq := new(VSeq)
 	rpc.Register(vSeq)
@@ -49,44 +45,35 @@ func main() {
 		log.Panic(l)
 	}
 
+
 	http.Serve(l, nil)
 }
 
-func (v *VSeq) NextV(args uint8, reply *[]byte) error {
-	tmp := atomic.AddUint64(&baseVersion, 1)
-	//*reply = make([]byte, 8)
-	//binary.BigEndian.PutUint64(*reply, tmp)
-	*reply = []byte(strconv.FormatUint(tmp, 10))
+func (v *VSeq) NextV(args uint8, reply *uint64) error {
+
 	lock.Lock()
-	vInuse[tmp] = "test"
+	baseVersion += 1
+	vInuse[baseVersion] = 1
+	*reply = baseVersion
 	lock.Unlock()
 	return nil
 }
 
-func (v *VSeq) VInUser(args uint8, reply *[][]byte) error {
-	lock.Lock()
-	ret := make([][]byte, len(vInuse))
-	idx := 0
-	for k, _ := range vInuse {
-		ret[idx] = []byte(strconv.FormatUint(k, 10))
-		idx += 1
+func (v *VSeq) VInUser(args uint8, reply *map[uint64]uint8) error {
+	lock.RLock()
+	ret := make(map[uint64]uint8, len(vInuse))
+	for k, v := range vInuse {
+		ret[k] = v
 	}
-	lock.Unlock()
 	*reply = ret
+	lock.RUnlock()
 	return nil
 }
 
-func (v *VSeq) Release(args []byte, reply *bool) error {
-
-	tmp := string(args)
-	fmt.Println(tmp)
-	version, err := strconv.ParseUint(tmp, 10, 64)
-	if err != nil {
-		return err
-	}
+func (v *VSeq) Release(args uint64, reply *bool) error {
 
 	lock.Lock()
-	delete(vInuse, version)
+	delete(vInuse, args)
 	*reply = true
 	lock.Unlock()
 	return nil
