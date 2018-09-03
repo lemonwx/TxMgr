@@ -1,8 +1,3 @@
-/**
- *  author: lim
- *  data  : 18-4-10 下午9:48
- */
-
 package main
 
 import (
@@ -10,17 +5,17 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
-	"sync"
 
-	"github.com/lemonwx/VSequence/base"
+	"github.com/lemonwx/TxMgr/proto"
 	"github.com/lemonwx/log"
 )
 
-var addr string = "192.168.1.2:1235"
-var NextV uint64
-var vInuse map[uint64]uint8
-var baseVersion uint64 = 1000
-var lock sync.RWMutex
+var (
+	addr     string = "192.168.1.2:1235"
+	max      uint64 = 1000
+	active          = map[uint64]bool{}
+	reqQueue        = make(chan *proto.Request, 1024)
+)
 
 type VSeq struct {
 }
@@ -33,14 +28,13 @@ func setupLogger() {
 		log.NewDefaultLogger(f)*/
 
 	log.NewDefaultLogger(os.Stdout)
-	log.SetLevel(log.DEBUG)
+	log.SetLevel(log.ERROR)
 	log.Debug("this is vseq's log")
 }
 
 func main() {
 
 	setupLogger()
-	vInuse = make(map[uint64]uint8, 1024)
 
 	vSeq := new(VSeq)
 	rpc.Register(vSeq)
@@ -51,50 +45,54 @@ func main() {
 		log.Panic(l)
 	}
 
+	go handleReq()
 	http.Serve(l, nil)
 }
 
-func (v *VSeq) NextV(args uint8, reply *uint64) error {
+func handleReq() {
+	for {
+		req := <-reqQueue
+		resp := &proto.Response{
+			Maxs:   make([]uint64, 0),
+			Active: make(map[uint64]bool),
+		}
+		hasQ := false
+		for _, cmd := range req.Cmds {
+			switch cmd {
+			case proto.Q:
+				hasQ = true
+			case proto.C:
+				max += 1
+				active[max] = false
+				resp.Maxs = append(resp.Maxs, max)
+			case proto.C_Q:
+				hasQ = true
+				max += 1
+				active[max] = false
+				resp.Maxs = append(resp.Maxs, max)
+			case proto.D:
+				gtid := req.ToDels[0]
+				req.ToDels = req.ToDels[1:]
+				delete(active, gtid)
+			default:
+				log.Errorf("receive unexpected cmd: %v", cmd)
+			}
+		}
 
-	lock.Lock()
-	baseVersion += 1
-	vInuse[baseVersion] = 1
-	*reply = baseVersion
-	lock.Unlock()
-	return nil
-}
+		if hasQ {
+			resp.Active = active
+		}
 
-func (v *VSeq) InUseAndNext(args uint8, reply *base.UseAndNext) error {
-	lock.Lock()
-	baseVersion += 1
-	ret := make(map[uint64]uint8, len(vInuse))
-	for k, v := range vInuse {
-		ret[k] = v
+		log.Debugf("resp to client")
+		req.Resp <- resp
 	}
-	log.Debug(reply, *reply)
-	reply.Next = baseVersion
-	reply.InUse = ret
-	vInuse[baseVersion] = 1
-	lock.Unlock()
-	return nil
 }
 
-func (v *VSeq) VInUser(args uint8, reply *map[uint64]uint8) error {
-	lock.RLock()
-	ret := make(map[uint64]uint8, len(vInuse))
-	for k, v := range vInuse {
-		ret[k] = v
-	}
-	*reply = ret
-	lock.RUnlock()
-	return nil
-}
-
-func (v *VSeq) Release(args uint64, reply *bool) error {
-
-	lock.Lock()
-	delete(vInuse, args)
-	*reply = true
-	lock.Unlock()
+func (v *VSeq) PushReq(req *proto.Request, resp **proto.Response) error {
+	req.Resp = make(chan *proto.Response, 1)
+	log.Debugf("receive %d requests merge to response", len(req.Cmds))
+	reqQueue <- req
+	*resp = <-req.Resp
+	log.Debugf("response %d merge requests", len(req.Cmds))
 	return nil
 }
