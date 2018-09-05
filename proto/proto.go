@@ -23,5 +23,5 @@ type Request struct {
 
 type Response struct {
 	Maxs   []uint64
-	Active map[uint64]bool
+	Active []uint64
 }

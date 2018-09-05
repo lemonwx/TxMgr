@@ -28,7 +28,7 @@ func setupLogger() {
 		log.NewDefaultLogger(f)*/
 
 	log.NewDefaultLogger(os.Stdout)
-	log.SetLevel(log.ERROR)
+	log.SetLevel(log.DEBUG)
 	log.Debug("this is vseq's log")
 }
 
@@ -52,10 +52,8 @@ func main() {
 func handleReq() {
 	for {
 		req := <-reqQueue
-		resp := &proto.Response{
-			Maxs:   make([]uint64, 0),
-			Active: make(map[uint64]bool),
-		}
+
+		maxs := make(map[uint64]bool, 0)
 		hasQ := false
 		for _, cmd := range req.Cmds {
 			switch cmd {
@@ -64,12 +62,12 @@ func handleReq() {
 			case proto.C:
 				max += 1
 				active[max] = false
-				resp.Maxs = append(resp.Maxs, max)
+				maxs[max] = false
 			case proto.C_Q:
 				hasQ = true
 				max += 1
 				active[max] = false
-				resp.Maxs = append(resp.Maxs, max)
+				maxs[max] = false
 			case proto.D:
 				gtid := req.ToDels[0]
 				req.ToDels = req.ToDels[1:]
@@ -79,8 +77,21 @@ func handleReq() {
 			}
 		}
 
+		resp := &proto.Response{
+			Maxs: make([]uint64, 0, len(maxs)),
+		}
+
+		for v, _ := range maxs {
+			resp.Maxs = append(resp.Maxs, v)
+		}
+
 		if hasQ {
-			resp.Active = active
+			resp.Active = make([]uint64, len(active)-len(maxs))
+			for v, _ := range active {
+				if _, ok := maxs[v]; !ok {
+					resp.Active = append(resp.Active, v)
+				}
+			}
 		}
 
 		log.Debugf("resp to client")
